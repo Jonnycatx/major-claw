@@ -1,0 +1,22 @@
+{
+  "name": "@majorclaw/gateway",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --watch src/index.ts",
+    "dev:server": "node --watch --import tsx src/server.ts",
+    "start": "node dist/server.js",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test src/**/*.test.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@majorclaw/db": "workspace:*",
+    "@majorclaw/router": "workspace:*",
+    "@majorclaw/shared-types": "workspace:*"
+  }
+}

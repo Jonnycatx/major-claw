@@ -1,0 +1,7 @@
+.neon-red {
+  box-shadow: 0 0 10px #ff3b00, 0 0 20px rgba(255, 59, 0, 0.75);
+}
+
+.neon-cyan {
+  box-shadow: 0 0 10px #00f0ff, 0 0 20px rgba(0, 240, 255, 0.75);
+}

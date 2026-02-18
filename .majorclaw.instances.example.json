@@ -1,0 +1,7 @@
+[
+  {
+    "id": "claw_local_1",
+    "name": "Local OpenClaw",
+    "wsUrl": "ws://127.0.0.1:7777/gateway"
+  }
+]

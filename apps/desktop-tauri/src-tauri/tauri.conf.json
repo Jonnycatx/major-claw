@@ -1,0 +1,28 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Major Claw",
+  "version": "0.1.0",
+  "identifier": "com.majorclaw.desktop",
+  "build": {
+    "beforeDevCommand": "pnpm --filter @majorclaw/desktop-web dev",
+    "beforeBuildCommand": "pnpm --filter @majorclaw/desktop-web build",
+    "frontendDist": "../../desktop-web/dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "title": "Major Claw Mission Control",
+        "width": 1600,
+        "height": 1000
+      }
+    ],
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["app", "dmg", "msi", "appimage"],
+    "icon": []
+  }
+}

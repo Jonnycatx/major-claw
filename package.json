@@ -1,0 +1,28 @@
+{
+  "name": "major-claw",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Local mission control for hierarchical OpenClaw agents.",
+  "packageManager": "pnpm@10.0.0",
+  "workspaces": [
+    "apps/*",
+    "services/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm --filter @majorclaw/desktop-web dev",
+    "dev:gateway": "pnpm --filter @majorclaw/gateway dev",
+    "dev:all": "pnpm -r --parallel dev",
+    "lint": "pnpm -r lint",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.7.3"
+  }
+}
