@@ -93,6 +93,7 @@ Security Review: Passed (P0 #3 strict input validation + secret redaction audit)
 
 ## Release Hardening
 
-- Tag-driven hardened release workflow: `.github/workflows/release.yml`
-- Legacy manual workflow: `.github/workflows/tauri-release.yml` (`workflow_dispatch` only)
+- Tag-driven release workflow: `.github/workflows/tauri-release.yml`
+- Manual hardened release workflow: `.github/workflows/release.yml` (`workflow_dispatch` only)
 - Release verification and operations guide: `docs/release-process.md`
+- Operator release runbook: `docs/RELEASING.md`
