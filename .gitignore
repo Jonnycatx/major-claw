@@ -10,3 +10,11 @@ apps/desktop-tauri/src-tauri/gen/
 *.db
 *.db-shm
 *.db-wal
+
+# Local runtime/temp workspaces
+.tmp/
+.tmp-openclaw-latest/
+
+# Test artifacts
+playwright-report/
+test-results/
