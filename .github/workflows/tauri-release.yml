@@ -89,6 +89,19 @@ jobs:
           path: dist/release-assets
           merge-multiple: true
 
+      - name: Prepare release files
+        run: |
+          mkdir -p dist/release-publish
+          find dist/release-assets -type f \
+            \( -name "*.dmg" -o -name "*.app.tar.gz" -o -name "*.msi" -o -name "*.exe" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.sig" -o -name "latest.json" \) \
+            -exec cp "{}" dist/release-publish/ \;
+          COUNT="$(find dist/release-publish -type f | wc -l | tr -d ' ')"
+          if [ "$COUNT" = "0" ]; then
+            echo "No publishable release files found."
+            exit 1
+          fi
+          echo "Prepared $COUNT release asset(s)."
+
       - name: Create or update draft GitHub release
         uses: softprops/action-gh-release@v2
         with:
@@ -97,4 +110,4 @@ jobs:
           body: See the full changelog in the repository.
           draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          files: dist/release-assets/**/*
+          files: dist/release-publish/**/*
