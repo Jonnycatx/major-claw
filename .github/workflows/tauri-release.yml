@@ -1,7 +1,10 @@
-name: tauri-release
+name: Build & Release
 
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - "v*.*.*"
+      - "v*.*.*-*"
 
 jobs:
   build:
@@ -25,57 +28,43 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: pnpm
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
 
-      - name: Install Rust toolchain
+      - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
 
       - name: Install Linux system dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf
 
-      - name: Install workspace dependencies
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate release secrets
+      - name: Build & bundle with Tauri
+        uses: tauri-apps/tauri-action@v0
         env:
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
-        run: |
-          if [ -z "$TAURI_SIGNING_PRIVATE_KEY" ]; then
-            echo "Missing required secret: TAURI_SIGNING_PRIVATE_KEY"
-            exit 1
-          fi
-          if [ -z "$TAURI_UPDATER_PUBLIC_KEY" ]; then
-            echo "Missing required secret: TAURI_UPDATER_PUBLIC_KEY"
-            exit 1
-          fi
-
-      - name: Inject updater public key into tauri config
-        env:
-          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
-        run: |
-          node -e "const fs=require('fs');const p='apps/desktop-tauri/src-tauri/tauri.conf.json';const cfg=JSON.parse(fs.readFileSync(p,'utf8'));cfg.plugins=cfg.plugins||{};cfg.plugins.updater=cfg.plugins.updater||{};cfg.plugins.updater.active=true;cfg.plugins.updater.pubkey=process.env.TAURI_UPDATER_PUBLIC_KEY;fs.writeFileSync(p,JSON.stringify(cfg,null,2)+'\n');"
-
-      - name: Build desktop web
-        run: pnpm --filter @majorclaw/desktop-web build
-
-      - name: Build Tauri bundles
-        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
           APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: pnpm --filter @majorclaw/desktop-tauri tauri build ${{ matrix.args }}
-
-      - name: Verify updater manifest and signatures
-        run: |
-          node -e "const fs=require('fs');const path=require('path');const root='apps/desktop-tauri/src-tauri/target/release/bundle';let latest=0,sigs=0;function walk(d){for(const e of fs.readdirSync(d,{withFileTypes:true})){const p=path.join(d,e.name);if(e.isDirectory())walk(p);else{if(e.name==='latest.json')latest++;if(e.name.endsWith('.sig'))sigs++;}}}if(!fs.existsSync(root)){console.error('Bundle output not found:',root);process.exit(1);}walk(root);if(latest<1){console.error('No latest.json found in bundle artifacts');process.exit(1);}if(sigs<1){console.error('No .sig files found for signed artifacts');process.exit(1);}console.log('Verified updater artifacts:',{latest,sigs});"
+        with:
+          projectPath: apps/desktop-tauri
+          tagName: ${{ github.ref_name }}
+          releaseName: Major Claw ${{ github.ref_name }}
+          releaseBody: See the full changelog in the repository.
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          args: ${{ matrix.args }}
