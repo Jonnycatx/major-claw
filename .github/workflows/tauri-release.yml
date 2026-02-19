@@ -13,11 +13,11 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            args: "--target universal-apple-darwin"
+            artifact_glob: apps/desktop-tauri/src-tauri/target/release/bundle/**/*
           - platform: ubuntu-22.04
-            args: ""
+            artifact_glob: apps/desktop-tauri/src-tauri/target/release/bundle/**/*
           - platform: windows-latest
-            args: ""
+            artifact_glob: apps/desktop-tauri/src-tauri/target/release/bundle/**/*
     runs-on: ${{ matrix.platform }}
     permissions:
       contents: write
@@ -46,10 +46,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build & bundle with Tauri
-        uses: tauri-apps/tauri-action@v0
+      - name: Build desktop web
+        run: pnpm --filter @majorclaw/desktop-web build
+
+      - name: Build Tauri bundles
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -60,11 +61,35 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
           WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: pnpm --filter @majorclaw/desktop-tauri build
+
+      - name: Upload platform artifacts
+        uses: actions/upload-artifact@v4
         with:
-          projectPath: apps/desktop-tauri
-          tagName: ${{ github.ref_name }}
-          releaseName: Major Claw ${{ github.ref_name }}
-          releaseBody: See the full changelog in the repository.
-          releaseDraft: true
+          name: release-${{ matrix.platform }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/release-assets
+          merge-multiple: true
+
+      - name: Create or update draft GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Major Claw ${{ github.ref_name }}
+          body: See the full changelog in the repository.
+          draft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          args: ${{ matrix.args }}
+          files: dist/release-assets/**/*
