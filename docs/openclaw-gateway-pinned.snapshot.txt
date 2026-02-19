@@ -1,0 +1,12 @@
+# OpenClaw Gateway Pinned Snapshot
+# Commit: a40c10d
+# Purpose: deterministic governance baseline for required CI check.
+
+gateway
+agent
+task
+vault
+token
+auth
+config
+

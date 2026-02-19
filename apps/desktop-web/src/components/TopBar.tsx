@@ -6,6 +6,7 @@ type TopBarProps = {
   onStartGateway: () => Promise<void>;
   onStopGateway: () => Promise<void>;
   onBrowseSkills: () => void;
+  onRedPhone: () => void;
 };
 
 function StatusDot({ color }: { color: "green" | "cyan" | "red" }) {
@@ -24,7 +25,8 @@ export function TopBar({
   spendToday,
   onStartGateway,
   onStopGateway,
-  onBrowseSkills
+  onBrowseSkills,
+  onRedPhone
 }: TopBarProps) {
   return (
     <header className="relative z-10 flex h-16 items-center justify-between border-b border-lobster/25 bg-void/90 px-5 backdrop-blur-sm">
@@ -55,6 +57,13 @@ export function TopBar({
         </button>
         <button className="lobster-button-filled" type="button" onClick={onBrowseSkills}>
           Browse Skills
+        </button>
+        <button
+          className="rounded-full border border-red-400/50 bg-red-500/20 px-3 py-1 text-xs font-semibold uppercase tracking-[0.1em] text-red-100 shadow-[0_0_14px_rgba(239,68,68,0.35)] transition hover:bg-red-500/30"
+          type="button"
+          onClick={onRedPhone}
+        >
+          Red Phone
         </button>
       </div>
     </header>

@@ -1,0 +1,76 @@
+{
+  "metadata": {
+    "owner": "Backend Lead",
+    "lastReviewedAt": "2026-02-19",
+    "lastVerifiedCommit": "f76f98b26896a7b01f3b2335bb34618c13655b10",
+    "notes": "Governance baseline for OpenClaw compatibility. Keep pinned commit deterministic for required CI gates; run latest-main checks as advisory and scheduled drift monitoring."
+  },
+  "reference": {
+    "repo": "openclaw/openclaw",
+    "branch": "main",
+    "pinnedCommit": "a40c10d",
+    "pinnedGatewaySnapshotPath": "docs/openclaw-gateway-pinned.snapshot.txt",
+    "candidateGatewayRawUrlsPinned": [
+      "https://raw.githubusercontent.com/openclaw/openclaw/{commit}/services/gateway/src/server.ts",
+      "https://raw.githubusercontent.com/openclaw/openclaw/{commit}/gateway/src/server.ts"
+    ],
+    "candidateGatewayRawUrlsLatest": [
+      "https://raw.githubusercontent.com/openclaw/openclaw/main/services/gateway/src/server.ts",
+      "https://raw.githubusercontent.com/openclaw/openclaw/main/gateway/src/server.ts"
+    ],
+    "requiredMarkers": [
+      "agent",
+      "task",
+      "vault",
+      "token"
+    ],
+    "latestSourceCandidates": {
+      "config": [
+        "src/gateway/server-runtime-config.ts",
+        "src/gateway/server.impl.ts",
+        "src/gateway/server.ts"
+      ],
+      "server": [
+        "src/gateway/http-utils.ts",
+        "src/gateway/method-scopes.ts",
+        "src/gateway/server.impl.ts",
+        "src/gateway/server.ts"
+      ],
+      "docs": [
+        "docs/gateway/index.md",
+        "docs/gateway/configuration-reference.md",
+        "docs/gateway/gateway-lock.md"
+      ]
+    }
+  },
+  "expectedRemoteGateway": {
+    "ws": "ws://127.0.0.1:18789",
+    "http": "http://127.0.0.1:18789",
+    "tokenHeader": "x-openclaw-session-key",
+    "authScopes": [
+      "operator.read"
+    ]
+  },
+  "expectedLocalContract": {
+    "mutatingRouteFragments": [
+      "/tasks/create",
+      "/agents/create",
+      "/agents/reorder",
+      "/vault/deposit",
+      "/vault/storage/relocate",
+      "/clawhub/install",
+      "/permissions/request",
+      "/system/shutdown"
+    ],
+    "authMarkers": [
+      "x-session-token",
+      "MAJORCLAW_GATEWAY_SESSION_TOKEN"
+    ],
+    "configMarkers": [
+      "MAJORCLAW_ALLOWED_ORIGINS",
+      "MAJORCLAW_RATE_LIMIT_WINDOW_MS",
+      "MAJORCLAW_RATE_LIMIT_MAX",
+      "MAJORCLAW_MAX_BODY_BYTES"
+    ]
+  }
+}

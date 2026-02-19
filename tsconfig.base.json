@@ -13,7 +13,8 @@
     "paths": {
       "@majorclaw/shared-types": ["packages/shared-types/src/index.ts"],
       "@majorclaw/router": ["packages/router/src/index.ts"],
-      "@majorclaw/db": ["packages/db/src/index.ts"]
+      "@majorclaw/db": ["packages/db/src/index.ts"],
+      "@majorclaw/mcp-host": ["packages/mcp-host/src/index.ts"]
     }
   }
 }

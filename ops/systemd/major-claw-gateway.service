@@ -1,0 +1,15 @@
+[Unit]
+Description=Major Claw Gateway
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/major-claw/workspace
+ExecStart=/usr/bin/pnpm --filter @majorclaw/gateway start
+Restart=always
+RestartSec=3
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+

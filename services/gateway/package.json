@@ -12,11 +12,14 @@
     "start": "node dist/server.js",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "node --import tsx --test src/**/*.test.ts",
+    "test:security": "node --import tsx --test src/server.security.validation.test.ts src/securityRedaction.test.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@majorclaw/db": "workspace:*",
+    "@majorclaw/mcp-host": "workspace:*",
     "@majorclaw/router": "workspace:*",
-    "@majorclaw/shared-types": "workspace:*"
+    "@majorclaw/shared-types": "workspace:*",
+    "zod": "^4.3.6"
   }
 }

@@ -7,45 +7,6 @@ import { SafetyWorkflow } from "./safetyWorkflow.js";
 const execAsync = promisify(exec);
 const CLAWHUB_API_BASE = "https://clawhub.ai/api/v1/skills";
 
-const mockSkills: ClawHubSkill[] = [
-  {
-    slug: "gog-email-assistant",
-    name: "Gog Email Assistant",
-    author: "claw-crew",
-    description: "Reads and drafts inbox workflows with safety guards.",
-    downloads: 18234,
-    stars: 1400,
-    version: "1.8.0",
-    categories: ["email", "productivity"],
-    permissions: ["gmail.read", "gmail.send", "filesystem.read"],
-    installed: false
-  },
-  {
-    slug: "tavily-research-pro",
-    name: "Tavily Research Pro",
-    author: "openclaw-community",
-    description: "Fast web research and summarization pipelines.",
-    downloads: 42111,
-    stars: 3100,
-    version: "2.1.3",
-    categories: ["research", "web"],
-    permissions: ["network.http", "filesystem.read"],
-    installed: false
-  },
-  {
-    slug: "calendar-ops",
-    name: "Calendar Ops",
-    author: "molty-labs",
-    description: "Calendar scheduling and availability automation.",
-    downloads: 13999,
-    stars: 800,
-    version: "0.9.4",
-    categories: ["calendar", "productivity"],
-    permissions: ["calendar.read", "calendar.write"],
-    installed: false
-  }
-];
-
 export class ClawHubService {
   private skillCache = new Map<string, ClawHubSkill>();
 
@@ -99,7 +60,7 @@ export class ClawHubService {
         };
       }
       return {
-        skills: this.sortSkills(mockSkills, sort),
+        skills: [],
         nextCursor: null,
         source: "cache"
       };
@@ -172,7 +133,7 @@ export class ClawHubService {
         ...skill,
         installed: agentId ? (assignmentMap.get(skill.slug) ?? skill.installed) : skill.installed
       }));
-      return normalized.length > 0 ? normalized : mockSkills.filter((skill) => skill.installed);
+      return normalized;
     }
   }
 
@@ -193,7 +154,7 @@ export class ClawHubService {
       this.saveToCache(parsed);
       return parsed.find((skill) => skill.slug === slug) ?? null;
     } catch {
-      return mockSkills.find((skill) => skill.slug === slug) ?? null;
+      return null;
     }
   }
 

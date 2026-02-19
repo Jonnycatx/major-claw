@@ -125,3 +125,91 @@ CREATE TABLE IF NOT EXISTS agent_stats (
   tasks_completed INTEGER DEFAULT 0,
   last_updated TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS checkpoints (
+  id TEXT PRIMARY KEY,
+  swarm_id TEXT NOT NULL,
+  step INTEGER NOT NULL,
+  state_json TEXT NOT NULL,
+  prompt_snapshot TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS budgets (
+  agent_id TEXT PRIMARY KEY,
+  token_limit INTEGER NOT NULL,
+  cost_limit_usd REAL NOT NULL,
+  current_tokens INTEGER NOT NULL DEFAULT 0,
+  current_cost_usd REAL NOT NULL DEFAULT 0,
+  hard_kill INTEGER NOT NULL DEFAULT 0,
+  updated_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS mcp_servers (
+  id TEXT PRIMARY KEY,
+  url TEXT NOT NULL,
+  capabilities_json TEXT NOT NULL,
+  auth_json TEXT NOT NULL,
+  connected_agents_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS episodic_memories (
+  id TEXT PRIMARY KEY,
+  agent_id TEXT NOT NULL,
+  embedding_json TEXT NOT NULL,
+  metadata_json TEXT NOT NULL,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS handoffs (
+  id TEXT PRIMARY KEY,
+  from_agent_id TEXT NOT NULL,
+  to_agent_id TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  task_id TEXT,
+  checkpoint_id TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS task_graphs (
+  id TEXT PRIMARY KEY,
+  task_id TEXT NOT NULL,
+  graph_json TEXT NOT NULL,
+  checkpoint_id TEXT,
+  created_at TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS vault_entries (
+  id TEXT PRIMARY KEY,
+  type TEXT NOT NULL,
+  title TEXT NOT NULL,
+  markdown_summary TEXT NOT NULL,
+  vector_embedding BLOB,
+  importance_score INTEGER NOT NULL,
+  tags_json TEXT NOT NULL,
+  agent_id TEXT NOT NULL,
+  task_id TEXT,
+  version INTEGER NOT NULL,
+  blob_path TEXT,
+  created_at TEXT NOT NULL,
+  expires_at TEXT,
+  encrypted INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS vault_versions (
+  entry_id TEXT NOT NULL,
+  version_num INTEGER NOT NULL,
+  blob_path TEXT,
+  diff TEXT,
+  created_at TEXT NOT NULL,
+  PRIMARY KEY (entry_id, version_num)
+);
+
+CREATE TABLE IF NOT EXISTS storage_stats (
+  snapshot_time TEXT PRIMARY KEY,
+  archive_gb REAL NOT NULL,
+  files_gb REAL NOT NULL,
+  total_gb REAL NOT NULL,
+  free_gb REAL NOT NULL
+);

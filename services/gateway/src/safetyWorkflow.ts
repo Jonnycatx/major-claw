@@ -42,7 +42,7 @@ export class SafetyWorkflow {
 
   deny(grantId: string): PermissionGrant {
     const denied = this.permissions.deny(grantId);
-    this.repository.addPermission(denied);
+    this.repository.removePermission(grantId);
     this.repository.addAuditLog(this.audit("permissions", "deny", "user", { grantId }));
     return denied;
   }
@@ -53,6 +53,12 @@ export class SafetyWorkflow {
 
   listAuditLogs(limit = 100): AuditLog[] {
     return this.repository.listAuditLogs(limit);
+  }
+
+  recordAudit(category: string, action: string, actor: string, metadata: Record<string, unknown>): AuditLog {
+    const log = this.audit(category, action, actor, metadata);
+    this.repository.addAuditLog(log);
+    return log;
   }
 
   private audit(category: string, action: string, actor: string, metadata: Record<string, unknown>): AuditLog {

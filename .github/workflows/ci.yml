@@ -1,0 +1,115 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  openclaw-compat-pinned:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run OpenClaw compatibility guard (required pinned baseline)
+        env:
+          OPENCLAW_COMPAT_REQUIRE_REMOTE: "false"
+          OPENCLAW_COMPAT_REMOTE_TIMEOUT_MS: "8000"
+        run: pnpm compat:openclaw:pinned
+
+  openclaw-compat-latest:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 8
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run OpenClaw compatibility drift signal (latest main)
+        env:
+          OPENCLAW_COMPAT_REQUIRE_REMOTE: ${{ vars.OPENCLAW_COMPAT_REQUIRE_REMOTE || 'false' }}
+          OPENCLAW_COMPAT_REMOTE_TIMEOUT_MS: ${{ vars.OPENCLAW_COMPAT_REMOTE_TIMEOUT_MS || '8000' }}
+        run: |
+          if [ "${OPENCLAW_COMPAT_REQUIRE_REMOTE}" = "true" ]; then
+            pnpm compat:strict
+          else
+            pnpm compat:check
+          fi
+
+  security-smoke:
+    runs-on: ubuntu-22.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run gateway security smoke tests
+        run: pnpm security:smoke
+
+  e2e-critical:
+    runs-on: macos-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run critical-path E2E suite
+        env:
+          E2E_REQUIRE_RUNTIME: "true"
+        run: pnpm e2e:critical
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report
+            test-results/playwright
+

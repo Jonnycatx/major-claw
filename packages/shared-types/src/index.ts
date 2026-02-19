@@ -144,6 +144,107 @@ export interface SwarmSummary {
   heartbeat: string;
 }
 
+export interface AgentBudget {
+  agentId: string;
+  tokenLimit: number;
+  costLimitUsd: number;
+  currentTokens: number;
+  currentCostUsd: number;
+  hardKill: boolean;
+  updatedAt: string;
+}
+
+export interface BudgetSnapshot {
+  global: AgentBudget;
+  agents: AgentBudget[];
+}
+
+export interface CheckpointRecord {
+  id: string;
+  swarmId: string;
+  step: number;
+  stateJson: string;
+  promptSnapshot?: string;
+  createdAt: string;
+}
+
+export interface McpServerEntry {
+  id: string;
+  url: string;
+  name: string;
+  capabilities: string[];
+  connected: boolean;
+  approvedScopes: string[];
+  createdAt: string;
+  lastConnectedAt?: string;
+}
+
+export interface McpToolEntry {
+  id: string;
+  serverId: string;
+  name: string;
+  description: string;
+  scopes: string[];
+}
+
+export type VaultEntryType = "archive" | "file" | "kb";
+
+export interface VaultEntry {
+  id: string;
+  type: VaultEntryType;
+  title: string;
+  markdownSummary: string;
+  importanceScore: number;
+  tags: string[];
+  agentId: string;
+  taskId?: string;
+  version: number;
+  blobPath?: string;
+  createdAt: string;
+  expiresAt?: string;
+  encrypted: boolean;
+}
+
+export interface VaultVersion {
+  entryId: string;
+  versionNum: number;
+  blobPath?: string;
+  diff?: string;
+  createdAt: string;
+}
+
+export interface VaultStorageStats {
+  snapshotTime: string;
+  archiveGb: number;
+  filesGb: number;
+  totalGb: number;
+  freeGb: number;
+}
+
+export type VaultStorageWarningLevel = "normal" | "warning_70" | "warning_85" | "critical_95";
+
+export interface VaultStorageInfo {
+  rootPath: string;
+  volumeName: string;
+  totalGb: number;
+  freeGb: number;
+  vaultUsedGb: number;
+  isExternal: boolean;
+  isNetwork: boolean;
+  warningLevel: VaultStorageWarningLevel;
+  isOfflineFallback: boolean;
+  tempCachePath?: string;
+  updatedAt: string;
+}
+
+export interface VaultSummary {
+  usedGb: number;
+  capacityGb: number;
+  archivedItems: number;
+  fileItems: number;
+  knowledgeItems: number;
+}
+
 export interface UsageReport {
   agentId: string;
   model: string;
@@ -212,4 +313,26 @@ export interface ClawHubInstallResult {
   assignedAgentId: string | null;
   message: string;
   requestedPermissionIds?: string[];
+}
+
+export type AppErrorCode =
+  | "ValidationError"
+  | "AuthError"
+  | "NotFound"
+  | "RateLimited"
+  | "InternalServerError"
+  | "NetworkError"
+  | "PermissionDenied"
+  | "VaultStorageFull";
+
+export interface ErrorResponse {
+  code: AppErrorCode | string;
+  message: string;
+  details?: unknown;
+  timestamp: string;
+}
+
+export interface ErrorEnvelope {
+  success: false;
+  error: ErrorResponse;
 }

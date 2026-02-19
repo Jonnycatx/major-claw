@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentProfile } from "@majorclaw/shared-types";
 import type { SwarmChatMessage, SwarmSummary } from "../tauriGateway.js";
-import { chatMessages, chatQuickAction, chatSend, chatSummary, chatThreads } from "../tauriGateway.js";
+import { chatMessages, chatQuickAction, chatSend, chatSummary, chatThreads, gatewaySessionToken } from "../tauriGateway.js";
+import { emitAppError } from "../utils/errorBus.js";
+import { normalizeError } from "../utils/errorMapper.js";
 
 type ChatCommandPanelProps = {
   agents: AgentProfile[];
@@ -44,6 +46,20 @@ function statusChipClass(status: AgentProfile["status"] | undefined): string {
   return "border-white/20 bg-white/10 text-text-secondary";
 }
 
+function messageContentWithRecallToggle(content: string, showRecallContext: boolean): string {
+  if (showRecallContext) {
+    return content;
+  }
+  if (!content.startsWith("### Vault Recall")) {
+    return content;
+  }
+  const splitAt = content.indexOf("\n\n");
+  if (splitAt === -1) {
+    return content;
+  }
+  return content.slice(splitAt + 2).trimStart();
+}
+
 export function ChatCommandPanel({
   agents,
   onJumpToAgent,
@@ -56,11 +72,16 @@ export function ChatCommandPanel({
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const [filter, setFilter] = useState<"all" | "cso" | "agent" | "skills">("all");
+  const [showRecallContext, setShowRecallContext] = useState(true);
   const [collapsedParents, setCollapsedParents] = useState<Record<string, boolean>>({});
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const lastStreamErrorAtRef = useRef(0);
 
   useEffect(() => {
     const boot = async () => {
+      const token = await gatewaySessionToken();
+      setSessionToken(token);
       const threads = await chatThreads();
       const selected = threads[0]?.id ?? "thread_cso_default";
       setThreadId(selected);
@@ -72,7 +93,8 @@ export function ChatCommandPanel({
   }, []);
 
   useEffect(() => {
-    const stream = new EventSource(`http://127.0.0.1:4455/chat/stream?threadId=${encodeURIComponent(threadId)}`);
+    const tokenQuery = sessionToken ? `&token=${encodeURIComponent(sessionToken)}` : "";
+    const stream = new EventSource(`http://127.0.0.1:4455/chat/stream?threadId=${encodeURIComponent(threadId)}${tokenQuery}`);
     stream.addEventListener("messages", (event) => {
       const payload = JSON.parse((event as MessageEvent<string>).data) as SwarmChatMessage[];
       setMessages((current) => mergeMessages(current, payload));
@@ -82,6 +104,14 @@ export function ChatCommandPanel({
       setSummary(payload);
     });
     stream.onerror = () => {
+      const now = Date.now();
+      if (now - lastStreamErrorAtRef.current > 15000) {
+        lastStreamErrorAtRef.current = now;
+        emitAppError({
+          context: "Chat stream",
+          error: normalizeError(new Error("chat stream disconnected"), "Chat stream")
+        });
+      }
       void (async () => {
         const [loadedMessages, loadedSummary] = await Promise.all([chatMessages(threadId), chatSummary()]);
         setMessages(loadedMessages);
@@ -91,7 +121,7 @@ export function ChatCommandPanel({
     return () => {
       stream.close();
     };
-  }, [threadId]);
+  }, [threadId, sessionToken]);
 
   useEffect(() => {
     if (listRef.current) {
@@ -182,6 +212,15 @@ export function ChatCommandPanel({
         <button type="button" className={`rounded-full px-2 py-1 ${filter === "skills" ? "bg-amber-300/20 text-amber-200" : "text-text-secondary"}`} onClick={() => setFilter("skills")}>
           Skill suggestions
         </button>
+        <button
+          type="button"
+          className={`ml-auto rounded-full border px-2.5 py-1 ${
+            showRecallContext ? "border-cyan/30 bg-cyan/10 text-cyan" : "border-white/20 bg-black/30 text-text-secondary"
+          }`}
+          onClick={() => setShowRecallContext((value) => !value)}
+        >
+          {showRecallContext ? "Vault Recall: On" : "Vault Recall: Off"}
+        </button>
       </div>
 
       <div ref={listRef} className="min-h-0 flex-1 space-y-2 overflow-y-auto px-4 py-3">
@@ -204,7 +243,7 @@ export function ChatCommandPanel({
               </div>
               <span>{new Date(message.createdAt).toLocaleTimeString()}</span>
             </div>
-            <p className="whitespace-pre-wrap text-text-primary">{message.content}</p>
+            <p className="whitespace-pre-wrap text-text-primary">{messageContentWithRecallToggle(message.content, showRecallContext)}</p>
 
             {message.type === "delegation" && Array.isArray(message.metadata?.steps) ? (
               <details className="mt-2 rounded-lg border border-lobster/25 bg-black/20 p-2 text-xs">
@@ -286,7 +325,7 @@ export function ChatCommandPanel({
                             </div>
                             <span>{new Date(reply.createdAt).toLocaleTimeString()}</span>
                           </div>
-                          <p className="whitespace-pre-wrap text-text-primary">{reply.content}</p>
+                          <p className="whitespace-pre-wrap text-text-primary">{messageContentWithRecallToggle(reply.content, showRecallContext)}</p>
                         </div>
                       );
                     })}

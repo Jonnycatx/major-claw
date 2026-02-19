@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Major Claw",
-  "version": "0.1.0",
-  "identifier": "com.majorclaw.desktop",
+  "version": "1.0.0",
+  "identifier": "com.jonnycatx.major-claw",
   "build": {
     "beforeDevCommand": "pnpm --filter @majorclaw/desktop-web dev",
     "beforeBuildCommand": "pnpm --filter @majorclaw/desktop-web build",
@@ -17,12 +17,32 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self' http://127.0.0.1:* http://localhost:* ws://127.0.0.1:* ws://localhost:* tauri://localhost https://openclaw.ai; img-src 'self' data: blob: https://openclaw.ai https://*.openclaw.ai; style-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none';"
     }
   },
   "bundle": {
     "active": true,
     "targets": ["app", "dmg", "msi", "appimage"],
-    "icon": []
+    "icon": [
+      "icons/icon.icns",
+      "icons/icon.ico",
+      "icons/icon.png"
+    ],
+    "publisher": "Jon Fiorucci",
+    "shortDescription": "Major Claw mission control for OpenClaw swarms.",
+    "longDescription": "Major Claw is a local-first cockpit for managing, governing, and monitoring hierarchical OpenClaw agent swarms.",
+    "copyright": "© 2026 Jon Fiorucci. All rights reserved.",
+    "macOS": {
+      "entitlements": "entitlements.plist"
+    }
+  },
+  "plugins": {
+    "updater": {
+      "active": true,
+      "endpoints": [
+        "https://github.com/Jonnycatx/major-claw/releases/latest/download/latest.json"
+      ],
+      "pubkey": "REPLACE_WITH_TAURI_UPDATER_PUBLIC_KEY"
+    }
   }
 }

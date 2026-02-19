@@ -12,10 +12,7 @@ import type {
 } from "@majorclaw/shared-types";
 import type { EventBus } from "./eventBus.js";
 import type { GatewayEvent } from "./types.js";
-
-function encryptApiKey(raw: string): string {
-  return Buffer.from(raw, "utf8").toString("base64");
-}
+import type { SecretStore } from "./secretStore.js";
 
 function sanitizeAgent(agent: AgentProfile): AgentProfile {
   return {
@@ -30,7 +27,8 @@ function sanitizeAgent(agent: AgentProfile): AgentProfile {
 export class AgentManager {
   constructor(
     private readonly repository: Repository,
-    private readonly events: EventBus<GatewayEvent>
+    private readonly events: EventBus<GatewayEvent>,
+    private readonly secretStore: SecretStore
   ) {}
 
   listAgents(): AgentProfile[] {
@@ -40,7 +38,8 @@ export class AgentManager {
   createAgent(payload: AgentCreatePayload): AgentProfile {
     const agent = sanitizeAgent(this.repository.createAgent(payload));
     if (payload.apiKey?.trim()) {
-      this.repository.setEncryptedApiKey(agent.id, encryptApiKey(payload.apiKey));
+      const secretRef = this.secretStore.put(`agent:${agent.id}`, payload.apiKey);
+      this.repository.setEncryptedApiKey(agent.id, secretRef);
     }
     this.events.emit({
       type: "agent.created",
@@ -55,7 +54,8 @@ export class AgentManager {
   updateAgentConfig(agentId: string, patch: AgentConfigPatch): AgentProfile {
     const agent = sanitizeAgent(this.repository.updateAgentConfig(agentId, patch));
     if (patch.apiKey?.trim()) {
-      this.repository.setEncryptedApiKey(agentId, encryptApiKey(patch.apiKey));
+      const secretRef = this.secretStore.put(`agent:${agentId}`, patch.apiKey);
+      this.repository.setEncryptedApiKey(agentId, secretRef);
     }
     this.events.emit({
       type: "agent.config_updated",
@@ -150,7 +150,8 @@ export class AgentManager {
       return { ok: false, message: `Connection failed: invalid ${provider} API key.`, status: "error" };
     }
     if (normalized) {
-      this.repository.setEncryptedApiKey(agentId, encryptApiKey(normalized));
+      const secretRef = this.secretStore.put(`agent:${agentId}`, normalized);
+      this.repository.setEncryptedApiKey(agentId, secretRef);
     }
     this.repository.updateAgentConfig(agentId, { status: "online" });
     this.audit(agentId, "connection_test_passed", `Connection test passed for ${provider}.`);

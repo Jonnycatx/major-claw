@@ -30,6 +30,13 @@ export class PermissionService {
     this.requests.set(grant.id, grant);
   }
 
+  restorePending(grants: PermissionGrant[]): void {
+    this.requests.clear();
+    for (const grant of grants) {
+      this.requests.set(grant.id, grant);
+    }
+  }
+
   approve(grantId: string): PermissionGrant {
     const grant = this.requests.get(grantId);
     if (!grant) {

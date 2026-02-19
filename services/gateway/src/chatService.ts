@@ -8,6 +8,9 @@ import type {
   SwarmSummary
 } from "@majorclaw/shared-types";
 import type { CsoOrchestrationEngine, TaskIntent } from "./csoEngine.js";
+import type { BudgetService } from "./budgetService.js";
+import type { CheckpointService } from "./checkpointService.js";
+import type { VaultService } from "./vaultService.js";
 
 const DEFAULT_THREAD_ID = "thread_cso_default";
 
@@ -20,6 +23,14 @@ function markdownPlan(goal: string, steps: DelegationPlanStep[]): string {
   for (const [index, step] of steps.entries()) {
     lines.push(`${index + 1}. ${step.task} -> @${step.agentId}`);
   }
+  return lines.join("\n");
+}
+
+function memoryContextBlock(content: string, recalled: { title: string; markdownSummary: string; importanceScore: number }[]): string {
+  if (recalled.length === 0) {
+    return content;
+  }
+  const lines = ["### Vault Recall", ...recalled.map((entry) => `- (${entry.importanceScore}/10) ${entry.title}: ${entry.markdownSummary}`), "", content];
   return lines.join("\n");
 }
 
@@ -51,7 +62,10 @@ export class ChatService {
 
   constructor(
     private readonly repository: Repository,
-    private readonly cso: CsoOrchestrationEngine
+    private readonly cso: CsoOrchestrationEngine,
+    private readonly budgets: BudgetService,
+    private readonly checkpoints: CheckpointService,
+    private readonly vault: VaultService
   ) {
     const existing = this.repository.listChatThreads();
     if (existing.length === 0) {
@@ -87,6 +101,19 @@ export class ChatService {
 
   sendMessage(threadId: string, content: string, userId: string): SwarmChatMessage[] {
     const emitted: SwarmChatMessage[] = [];
+    const budgetCheck = this.budgets.canRun("agent_cso");
+    if (!budgetCheck.allowed) {
+      const blocked: SwarmChatMessage = {
+        id: randomUUID(),
+        threadId,
+        type: "system",
+        author: "system",
+        content: `Execution blocked: ${budgetCheck.reason ?? "budget limit reached."}`,
+        createdAt: nowIso()
+      };
+      this.repository.appendSwarmMessage(blocked);
+      return [blocked];
+    }
     const userMessage: SwarmChatMessage = {
       id: randomUUID(),
       threadId,
@@ -97,6 +124,22 @@ export class ChatService {
     };
     this.repository.appendSwarmMessage(userMessage);
     emitted.push(userMessage);
+    const roughPromptTokens = Math.max(12, Math.ceil(content.length / 4));
+    const roughCompletionTokens = Math.max(24, Math.ceil(content.length / 3));
+    this.budgets.registerUsage({
+      agentId: "agent_cso",
+      model: "cso-control",
+      promptTokens: roughPromptTokens,
+      completionTokens: roughCompletionTokens,
+      costUsd: Number(((roughPromptTokens + roughCompletionTokens) * 0.0000025).toFixed(6)),
+      timestamp: nowIso()
+    });
+    this.checkpoints.create("swarm_main", content, {
+      threadId,
+      author: userId,
+      messageCount: this.repository.listSwarmMessages(threadId).length
+    });
+    const recalled = this.vault.recallForContext(content, 5, 7);
 
     const quick = content.trim().toLowerCase();
     if (quick === "/status") {
@@ -110,7 +153,8 @@ export class ChatService {
           2
         )} spend today.`,
         createdAt: nowIso(),
-        parentMessageId: userMessage.id
+        parentMessageId: userMessage.id,
+        metadata: { recalled: recalled.map((entry) => ({ id: entry.id, title: entry.title, importanceScore: entry.importanceScore })) }
       };
       this.repository.appendSwarmMessage(message);
       emitted.push(message);
@@ -124,10 +168,13 @@ export class ChatService {
         threadId,
         type: "cso",
         author: "CSO",
-        content:
+        content: memoryContextBlock(
           "I can help directly, or delegate to specialists. If you want swarm execution, say: 'delegate this' or describe a goal with constraints.",
+          recalled
+        ),
         createdAt: nowIso(),
-        parentMessageId: userMessage.id
+        parentMessageId: userMessage.id,
+        metadata: { recalled: recalled.map((entry) => ({ id: entry.id, title: entry.title, importanceScore: entry.importanceScore })) }
       };
       this.repository.appendSwarmMessage(direct);
       emitted.push(direct);
@@ -149,10 +196,13 @@ export class ChatService {
       threadId,
       type: "delegation",
       author: "CSO",
-      content: markdownPlan(content, steps),
+      content: memoryContextBlock(markdownPlan(content, steps), recalled),
       createdAt: nowIso(),
       parentMessageId: userMessage.id,
-      metadata: { steps }
+      metadata: {
+        steps,
+        recalled: recalled.map((entry) => ({ id: entry.id, title: entry.title, importanceScore: entry.importanceScore }))
+      }
     };
     this.repository.appendSwarmMessage(csoPlanMessage);
     this.repository.upsertDelegationPlan(csoPlanMessage.id, steps);
@@ -194,12 +244,36 @@ export class ChatService {
       threadId,
       type: "cso",
       author: "CSO",
-      content: "Delegation in motion. I will stream major milestones and raise blockers proactively.",
+      content: memoryContextBlock("Delegation in motion. I will stream major milestones and raise blockers proactively.", recalled),
       createdAt: nowIso(),
-      parentMessageId: userMessage.id
+      parentMessageId: userMessage.id,
+      metadata: { recalled: recalled.map((entry) => ({ id: entry.id, title: entry.title, importanceScore: entry.importanceScore })) }
     };
     this.repository.appendSwarmMessage(summary);
     emitted.push(summary);
+    return emitted;
+  }
+
+  listCheckpoints(swarmId = "swarm_main", limit = 50) {
+    return this.checkpoints.list(swarmId, limit);
+  }
+
+  rewind(threadId: string, checkpointId: string, editPrompt?: string): SwarmChatMessage[] {
+    const restored = this.checkpoints.rewind("swarm_main", checkpointId);
+    const emitted: SwarmChatMessage[] = [];
+    const message: SwarmChatMessage = {
+      id: randomUUID(),
+      threadId,
+      type: "system",
+      author: "system",
+      content: `Rewound swarm to checkpoint step ${restored.step}.`,
+      createdAt: nowIso()
+    };
+    this.repository.appendSwarmMessage(message);
+    emitted.push(message);
+    if (editPrompt?.trim()) {
+      emitted.push(...this.sendMessage(threadId, editPrompt.trim(), "user"));
+    }
     return emitted;
   }
 

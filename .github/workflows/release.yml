@@ -1,0 +1,213 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  quality-gates:
+    runs-on: macos-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Validate release secrets
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_ID_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+          CODE_SIGNING_CERT: ${{ secrets.CODE_SIGNING_CERT }}
+          CODE_SIGNING_CERT_PASSWORD: ${{ secrets.CODE_SIGNING_CERT_PASSWORD }}
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_SIGNING_KEY_PASSWORD: ${{ secrets.GPG_SIGNING_KEY_PASSWORD }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+        run: |
+          for key in APPLE_ID APPLE_ID_PASSWORD APPLE_TEAM_ID APPLE_CERTIFICATE APPLE_CERT_PASSWORD CODE_SIGNING_CERT CODE_SIGNING_CERT_PASSWORD GPG_SIGNING_KEY GPG_SIGNING_KEY_PASSWORD TAURI_SIGNING_PRIVATE_KEY TAURI_UPDATER_PUBLIC_KEY; do
+            if [ -z "${!key}" ]; then
+              echo "Missing required release secret: $key"
+              exit 1
+            fi
+          done
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run release quality gates
+        env:
+          E2E_REQUIRE_RUNTIME: "true"
+        run: |
+          pnpm typecheck
+          pnpm test
+          pnpm e2e:critical
+
+  build-and-sign:
+    needs: quality-gates
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            tauri_args: "--target universal-apple-darwin"
+          - os: ubuntu-22.04
+            tauri_args: ""
+          - os: windows-latest
+            tauri_args: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install Linux dependencies
+        if: matrix.os == 'ubuntu-22.04'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev librsvg2-dev patchelf gnupg
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Inject updater public key into tauri config
+        env:
+          TAURI_UPDATER_PUBLIC_KEY: ${{ secrets.TAURI_UPDATER_PUBLIC_KEY }}
+        run: |
+          node -e "const fs=require('fs');const p='apps/desktop-tauri/src-tauri/tauri.conf.json';const cfg=JSON.parse(fs.readFileSync(p,'utf8'));cfg.plugins=cfg.plugins||{};cfg.plugins.updater=cfg.plugins.updater||{};cfg.plugins.updater.active=true;cfg.plugins.updater.pubkey=process.env.TAURI_UPDATER_PUBLIC_KEY;fs.writeFileSync(p,JSON.stringify(cfg,null,2)+'\n');"
+
+      - name: Build desktop web
+        run: pnpm --filter @majorclaw/desktop-web build
+
+      - name: Import Apple signing certificate
+        if: matrix.os == 'macos-latest'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+        run: |
+          echo "$APPLE_CERTIFICATE" | base64 --decode > /tmp/apple_certificate.p12
+          security create-keychain -p "" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "" build.keychain
+          security import /tmp/apple_certificate.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security list-keychains -d user -s build.keychain
+
+      - name: Build Tauri bundles
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: pnpm --filter @majorclaw/desktop-tauri tauri build ${{ matrix.tauri_args }}
+
+      - name: Notarize macOS DMG
+        if: matrix.os == 'macos-latest'
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_ID_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          DMG="$(ls apps/desktop-tauri/src-tauri/target/*/release/bundle/dmg/*.dmg | head -n 1)"
+          if [ -z "$DMG" ]; then
+            echo "DMG artifact not found for notarization"
+            exit 1
+          fi
+          xcrun notarytool submit "$DMG" --apple-id "$APPLE_ID" --password "$APPLE_PASSWORD" --team-id "$APPLE_TEAM_ID" --wait
+          xcrun stapler staple "$DMG"
+
+      - name: Sign Windows artifacts
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          CODE_SIGNING_CERT: ${{ secrets.CODE_SIGNING_CERT }}
+          CODE_SIGNING_CERT_PASSWORD: ${{ secrets.CODE_SIGNING_CERT_PASSWORD }}
+        run: |
+          $certPath = "$env:RUNNER_TEMP\codesign.pfx"
+          [IO.File]::WriteAllBytes($certPath, [Convert]::FromBase64String($env:CODE_SIGNING_CERT))
+          Import-PfxCertificate -FilePath $certPath -CertStoreLocation Cert:\CurrentUser\My -Password (ConvertTo-SecureString -String $env:CODE_SIGNING_CERT_PASSWORD -Force -AsPlainText) | Out-Null
+          $signtool = (Get-Command signtool).Source
+          $targets = Get-ChildItem "apps/desktop-tauri/src-tauri/target" -Recurse -Include *.msi,*.exe
+          if ($targets.Count -eq 0) { throw "No Windows artifacts found for signing" }
+          foreach ($f in $targets) {
+            & $signtool sign /fd SHA256 /td SHA256 /tr http://timestamp.digicert.com /f $certPath /p $env:CODE_SIGNING_CERT_PASSWORD $f.FullName
+          }
+
+      - name: Upload platform artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.os }}
+          path: apps/desktop-tauri/src-tauri/target/*/release/bundle/**/*
+
+  publish:
+    needs: build-and-sign
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download platform artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/release-assets
+          merge-multiple: true
+
+      - name: Verify updater artifacts are present
+        run: |
+          if ! find dist/release-assets -name "latest.json" | grep -q .; then
+            echo "Missing latest.json in release assets"
+            exit 1
+          fi
+          if ! find dist/release-assets -name "*.sig" | grep -q .; then
+            echo "Missing .sig updater signature artifacts"
+            exit 1
+          fi
+
+      - name: Generate SHA256 checksums
+        run: |
+          cd dist/release-assets
+          find . -type f | sort | sed 's|^\./||' | xargs -I{} sha256sum "{}" > SHA256SUMS
+
+      - name: Sign checksum manifest with GPG
+        env:
+          GPG_SIGNING_KEY: ${{ secrets.GPG_SIGNING_KEY }}
+          GPG_SIGNING_KEY_PASSWORD: ${{ secrets.GPG_SIGNING_KEY_PASSWORD }}
+        run: |
+          echo "$GPG_SIGNING_KEY" | base64 --decode > /tmp/release.key
+          gpg --batch --import /tmp/release.key
+          gpg --batch --yes --pinentry-mode loopback --passphrase "$GPG_SIGNING_KEY_PASSWORD" --detach-sign --armor dist/release-assets/SHA256SUMS
+
+      - name: Publish GitHub release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/release-assets/**/*
+            dist/release-assets/SHA256SUMS
+            dist/release-assets/SHA256SUMS.asc
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+
